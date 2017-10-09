@@ -1,30 +1,37 @@
 import { delay } from 'redux-saga'
-import { put, takeEvery, all, call, select } from 'redux-saga/effects'
+import { put, takeEvery, take, all, call, fork, cancel, select, cancelled } from 'redux-saga/effects'
 
-export function* helloSaga() {
-  console.log('Hello Sagas!')
-}
 
 export function* incrementAsync() {
-  yield call(delay, 1000)
+  yield call(delay, 2500)
+
+  if (yield cancelled())
+    return;
+
   yield put({ type: 'INCREMENT' })
 }
 
-export function* watchIncrementAsync() {
-  yield takeEvery('INCREMENT_ASYNC', incrementAsync)
+export function* incrementAsyncFlow() {
+  while (true) {
+    yield take('INCREMENT_ASYNC')
+    const task = yield fork(incrementAsync)
+    const issue = yield take(['INCREMENT_ASYNC_CANCEL', 'INCREMENT'])
+    if (issue.type === 'INCREMENT_ASYNC_CANCEL')
+      yield cancel(task)
+  }
 }
-export function * watchAll() {
+
+export default function* rootSaga() {
+  yield all([
+    incrementAsyncFlow(),
+    logAll(),
+  ])
+}
+
+export function * logAll() {
   yield takeEvery('*', function* log(action) {
     const state = yield select();
     console.log('action', action);
     console.log('state after', state)
   })
-}
-
-export default function* rootSaga() {
-  yield all([
-    helloSaga(),
-    watchIncrementAsync(),
-    watchAll(),
-  ])
 }
